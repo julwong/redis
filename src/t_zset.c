@@ -138,7 +138,7 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     x = zsl->header;
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
-        rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];
+        rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];  /* 已经跳过的节点数 */
         while (x->level[i].forward &&
                 (x->level[i].forward->score < score ||
                     (x->level[i].forward->score == score &&
@@ -147,7 +147,7 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
             rank[i] += x->level[i].span;
             x = x->level[i].forward;
         }
-        update[i] = x;
+        update[i] = x;  /* backword */
     }
     /* we assume the element is not already inside, since we allow duplicated
      * scores, reinserting the same element should never happen since the
@@ -156,9 +156,9 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     level = zslRandomLevel();
     if (level > zsl->level) {
         for (i = zsl->level; i < level; i++) {
-            rank[i] = 0;
+            rank[i] = 0; // 这一层没跳过节点
             update[i] = zsl->header;
-            update[i]->level[i].span = zsl->length;
+            update[i]->level[i].span = zsl->length; // 第一次插入时，span == 0
         }
         zsl->level = level;
     }
@@ -247,6 +247,7 @@ int zslDelete(zskiplist *zsl, double score, sds ele, zskiplistNode **node) {
 
 /* Update the score of an element inside the sorted set skiplist.
  * Note that the element must exist and must match 'score'.
+ *** 要更新的元素必须在链表中，且 curscore == score ***
  * This function does not update the score in the hash table side, the
  * caller should take care of it.
  *
@@ -442,7 +443,9 @@ unsigned long zslDeleteRangeByLex(zskiplist *zsl, zlexrangespec *range, dict *di
 }
 
 /* Delete all the elements with rank between start and end from the skiplist.
- * Start and end are inclusive. Note that start and end need to be 1-based */
+ * Start and end are inclusive. Note that start and end need to be 1-based 
+ *** start 和 end ***是从 1 开始的
+ */
 unsigned long zslDeleteRangeByRank(zskiplist *zsl, unsigned int start, unsigned int end, dict *dict) {
     zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
     unsigned long traversed = 0, removed = 0;
@@ -473,6 +476,7 @@ unsigned long zslDeleteRangeByRank(zskiplist *zsl, unsigned int start, unsigned 
 
 /* Find the rank for an element by both score and key.
  * Returns 0 when the element cannot be found, rank otherwise.
+ *** 跳转表的 rank 是从 1 开始的（因为 zsl->hader 的 level[0] 的 span 为 1） ***
  * Note that the rank is 1-based due to the span of zsl->header to the
  * first element. */
 unsigned long zslGetRank(zskiplist *zsl, double score, sds ele) {
