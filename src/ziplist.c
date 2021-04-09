@@ -953,6 +953,20 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
      * its prevlen field. */
     int forcelarge = 0;
     nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) : 0;
+    /*
+    当nextdiff=4而reqlen<4时会发生什么呢？
+    没错，插入元素导致压缩列表所需空间减小了，
+    即函数ziplistResize内部调用realloc重新分配的空间小于指针zl指向的空间。
+    我们知道realloc重新分配空间时，返回的地址可能不变（当前位置有足够的内存空间可供分配），
+    当重新分配的空间减小时，realloc可能会将多余的空间回收，导致数据丢失。因此需要避免这种情况的发生，
+    即重新赋值nextdiff=0，同时使用forcelarge标记这种情况。
+    那么，nextdiff=-4时，reqlen会小于4吗？
+    nextdiff=-4说明插入元素之前entryX+1元素的previous_entry_length字段的长度是5字节，
+    即entryX元素的总长度大于或等于254字节，所以entryNEW元素的previous_entry_length字段同样需要5个字节，
+    即entryNEW元素的总长度肯定是大于5个字节的，reqlen又怎么会小于4呢？正常情况下是不会出现这种情况的，
+    但是由于存在连锁更新（将在4.4节介绍），可能会出现nextdiff=-4但entryX元素的总长度小于254字节的情况，
+    此时reqlen可能会小于4。
+     */
     if (nextdiff == -4 && reqlen < 4) { /* 否则 memmove 中 src 比 dst 靠后，会出错 */
         nextdiff = 0;
         forcelarge = 1;
