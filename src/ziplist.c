@@ -1192,7 +1192,7 @@ unsigned char *ziplistIndex(unsigned char *zl, int index) {
  *
  * The element after 'p' is returned, otherwise NULL if we are at the end. */
 unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) {
-    ((void) zl); // TODO 这是在干嘛？？
+    ((void) zl); //zl参数无用；这里只是为了避免警告
     size_t zlbytes = intrev32ifbe(ZIPLIST_BYTES(zl));
 
     /* "p" could be equal to ZIP_END, caused by ziplistDelete,
