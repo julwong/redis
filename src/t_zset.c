@@ -730,7 +730,7 @@ double zzlStrtod(unsigned char *vstr, unsigned int vlen) {
     if (vlen > sizeof(buf))
         vlen = sizeof(buf);
     memcpy(buf,vstr,vlen);
-    buf[vlen] = '\0';
+    buf[vlen] = '\0'; // 这个函数目前只有解score的时候用, d2string 保证字符串为17位有效数字（最长19），不会出现 vlen == 128 的情况
     return strtod(buf,NULL);
  }
 
@@ -784,7 +784,7 @@ int zzlCompareElements(unsigned char *eptr, unsigned char *cstr, unsigned int cl
     }
 
     minlen = (vlen < clen) ? vlen : clen;
-    cmp = memcmp(vstr,cstr,minlen);
+    cmp = memcmp(vstr,cstr,minlen); // 前缀
     if (cmp == 0) return vlen-clen;
     return cmp;
 }

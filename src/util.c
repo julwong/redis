@@ -571,7 +571,7 @@ int d2string(char *buf, size_t len, double value) {
             len = ll2string(buf,len,(long long)value);
         else
 #endif
-            len = snprintf(buf,len,"%.17g",value);
+            len = snprintf(buf,len,"%.17g",value); /* 保证 zzlStrtod 的 buf 不越界 */
     }
 
     return len;
