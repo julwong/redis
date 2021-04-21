@@ -469,6 +469,7 @@ int _dictClear(dict *d, dictht *ht, void(callback)(void *)) {
     for (i = 0; i < ht->size && ht->used > 0; i++) {
         dictEntry *he, *nextHe;
 
+        // TODO 65535 for what?
         if (callback && (i & 65535) == 0) callback(d->privdata);
 
         if ((he = ht->table[i]) == NULL) continue;
