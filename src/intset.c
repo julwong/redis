@@ -182,7 +182,7 @@ static intset *intsetUpgradeAndAdd(intset *is, int64_t value) {
 
 static void intsetMoveTail(intset *is, uint32_t from, uint32_t to) {
     void *src, *dst;
-    uint32_t bytes = intrev32ifbe(is->length)-from;
+    uint32_t bytes = intrev32ifbe(is->length)-from; // tail
     uint32_t encoding = intrev32ifbe(is->encoding);
 
     if (encoding == INTSET_ENC_INT64) {
