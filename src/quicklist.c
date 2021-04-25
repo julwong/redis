@@ -309,7 +309,7 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
     int depth = 0;
     int in_depth = 0;
     while (depth++ < quicklist->compress) {
-        quicklistDecompressNode(forward);
+        quicklistDecompressNode(forward); // TODO: for what? 保证头尾各 depth 个节点不压缩，加快访问速度？
         quicklistDecompressNode(reverse);
 
         if (forward == node || reverse == node)
@@ -332,6 +332,8 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
     quicklistCompressNode(reverse);
 }
 
+// recompress: 只压缩单个节点
+// otherwise: 解压压缩深度以内的节点（节点数可能发生变化）
 #define quicklistCompress(_ql, _node)                                          \
     do {                                                                       \
         if ((_node)->recompress)                                               \
@@ -1105,6 +1107,7 @@ void quicklistReleaseIterator(quicklistIter *iter) {
     zfree(iter);
 }
 
+// TODO 迭代过程中删除元素之后如何保证迭代器可用? 应该是在迭代过程中删除，由迭代器使用者保证
 /* Get next element in iterator.
  *
  * Note: You must NOT insert into the list while iterating over it.

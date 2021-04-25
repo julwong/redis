@@ -134,16 +134,16 @@ lzf_compress (const void *const in_data, unsigned int in_len,
   memset (htab, 0, sizeof (htab));
 #endif
 
-  lit = 0; op++; /* start run */
+  lit = 0; op++; /* start run */ // TODO lit for literal, op++ for what?
 
-  hval = FRST (ip);
+  hval = FRST (ip); // 2 octets
   while (ip < in_end - 2)
     {
       LZF_HSLOT *hslot;
 
-      hval = NEXT (hval, ip);
+      hval = NEXT (hval, ip); // 3 octets
       hslot = htab + IDX (hval);
-      ref = *hslot + LZF_HSLOT_BIAS; *hslot = ip - LZF_HSLOT_BIAS;
+      ref = *hslot + LZF_HSLOT_BIAS; *hslot = ip - LZF_HSLOT_BIAS; // ref <- 上一个命中这个槽位的起始位置，存储当前位置
 
       if (1
 #if INIT_HTAB
@@ -168,9 +168,11 @@ lzf_compress (const void *const in_data, unsigned int in_len,
             if (op - !lit + 3 + 1 >= out_end) /* second the exact but rare test */
               return 0;
 
+          // lit > 0 时，回退 填充 lit 长度，lit == 0 时，回退 1（因为start run时op++了）
           op [- lit - 1] = lit - 1; /* stop run */
           op -= !lit; /* undo run if length is zero */
 
+          // 优化。。。
           for (;;)
             {
               if (expect_true (maxlen > 16))
@@ -208,7 +210,7 @@ lzf_compress (const void *const in_data, unsigned int in_len,
 
           if (len < 7)
             {
-              *op++ = (off >> 8) + (len << 5);
+              *op++ = (off >> 8) + (len << 5); // off < (1 << 13)
             }
           else
             {
