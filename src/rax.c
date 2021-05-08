@@ -103,7 +103,7 @@ static inline int raxStackPush(raxStack *ts, void *ptr) {
     if (ts->items == ts->maxitems) {
         if (ts->stack == ts->static_items) {
             ts->stack = rax_malloc(sizeof(void*)*ts->maxitems*2);
-            if (ts->stack == NULL) {
+            if (ts->stack == NULL) {  // TODO 调用者需要检查是否发生 oom，否则会丢数据
                 ts->stack = ts->static_items;
                 ts->oom = 1;
                 errno = ENOMEM;
@@ -470,7 +470,7 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
             for (j = 0; j < h->size && i < len; j++, i++) {
                 if (v[j] != s[i]) break;
             }
-            if (j != h->size) break;
+            if (j != h->size) break; // 不匹配，但 i 已经记录了最大匹配长度
         } else {
             /* Even when h->size is large, linear scan provides good
              * performances compared to other approaches that are in theory
@@ -478,14 +478,14 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
             for (j = 0; j < h->size; j++) {
                 if (v[j] == s[i]) break;
             }
-            if (j == h->size) break;
+            if (j == h->size) break; // 所有自节点都已遍历，不匹配
             i++;
         }
 
-        if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */
+        if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */ // TODO 有可能 oom，应该检查 errno
         raxNode **children = raxNodeFirstChildPtr(h);
         if (h->iscompr) j = 0; /* Compressed node only child is at index 0. */
-        memcpy(&h,children+j,sizeof(h));
+        memcpy(&h,children+j,sizeof(h)); // h <- *(chidren+j)
         parentlink = children+j;
         j = 0; /* If the new node is non compressed and we do not
                   iterate again (since i == len) set the split
@@ -527,7 +527,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         /* Make space for the value pointer if needed. */
         if (!h->iskey || (h->isnull && overwrite)) {
             h = raxReallocForData(h,data);
-            if (h) memcpy(parentlink,&h,sizeof(h));
+            if (h) memcpy(parentlink,&h,sizeof(h)); // 有可能因为 reallocforData 改变了地址，更新一下 reference
         }
         if (h == NULL) {
             errno = ENOMEM;
@@ -557,7 +557,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * node containing the string "ANNIBALE" (it means that it represents
      * nodes A -> N -> N -> I -> B -> A -> L -> E with the only child
      * pointer of this node pointing at the 'E' node, because remember that
-     * we have characters at the edges of the graph, not inside the nodes
+     * we have characters at the edges of the graph, not inside the nodes  <<--------- attttttttttention --------->>
      * themselves.
      *
      * In order to show a real case imagine our node to also point to
@@ -729,19 +729,25 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         }
         splitnode->data[0] = h->data[j];
 
-        if (j == 0) {
+        if (j == 0) { // trimmed 为 null
             /* 3a: Replace the old node with the split node. */
             if (h->iskey) {
                 void *ndata = raxGetData(h);
                 raxSetData(splitnode,ndata);
             }
-            memcpy(parentlink,&splitnode,sizeof(splitnode));
+            memcpy(parentlink,&splitnode,sizeof(splitnode)); 
+            // 替换了唯一的 node "alg" -> [] 
+            // |"a"| -> [] 
+            // 最终型
+            // |"a"| -> |"lg"| -> []
+            // | - |
+            // |"c"| -> |"ao"| -> []
         } else {
             /* 3b: Trim the compressed node. */
             trimmed->size = j;
             memcpy(trimmed->data,h->data,j);
             trimmed->iscompr = j > 1 ? 1 : 0;
-            trimmed->iskey = h->iskey;
+            trimmed->iskey = h->iskey; // key 不包含 child
             trimmed->isnull = h->isnull;
             if (h->iskey && !h->isnull) {
                 void *ndata = raxGetData(h);
@@ -752,13 +758,19 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             memcpy(parentlink,&trimmed,sizeof(trimmed));
             parentlink = cp; /* Set parentlink to splitnode parent. */
             rax->numnodes++;
+            // 替换了唯一的 node "alg" -> [] 
+            // |"al"| -> |"g"| -> []
+            // 最终型
+            //           |"g"| -> []
+            // |"al"| -> | - |
+            //           |"o"| -> []
         }
 
         /* 4: Create the postfix node: what remains of the original
          * compressed node after the split. */
         if (postfixlen) {
             /* 4a: create a postfix node. */
-            postfix->iskey = 0;
+            postfix->iskey = 0; // 从中间分裂开的，肯定不是 key
             postfix->isnull = 0;
             postfix->size = postfixlen;
             postfix->iscompr = postfixlen > 1;
@@ -779,7 +791,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
          * get a new child (the non common character at the currently
          * inserted key). */
         rax_free(h);
-        h = splitnode;
+        h = splitnode; // 现在 h 就是非 compr 的
     } else if (h->iscompr && i == len) {
     /* ------------------------- ALGORITHM 2 --------------------------- */
         debugf("ALGO 2: Stopped at compressed node %.*s (%p) j = %d\n",
@@ -1053,7 +1065,7 @@ int raxRemove(rax *rax, unsigned char *s, size_t len, void **old) {
                 (int)child->size, (char*)child->data, child->iskey);
             rax_free(child);
             rax->numnodes--;
-            h = raxStackPop(&ts);
+            h = raxStackPop(&ts); // TODO 有可能 oom ！！！！！！！！
              /* If this node has more then one child, or actually holds
               * a key, stop here. */
             if (h->iskey || (!h->iscompr && h->size != 1)) break;
@@ -1283,6 +1295,7 @@ int raxIteratorAddChars(raxIterator *it, unsigned char *s, size_t len) {
         if (old == NULL) memcpy(it->key,it->key_static_string,it->key_len);
         it->key_max = new_max;
     }
+    // TODO: memcpy v.s. memmove
     /* Use memmove since there could be an overlap between 's' and
      * it->key when we use the current key in order to re-seek. */
     memmove(it->key+it->key_len,s,len);
@@ -1569,6 +1582,8 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
     if (eq && i == len && (!it->node->iscompr || splitpos == 0) &&
         it->node->iskey)
     {
+        // stack 已经保存了完整路径
+        
         /* We found our node, since the key matches and we have an
          * "equal" condition. */
         if (!raxIteratorAddChars(it,ele,len)) return 0; /* OOM. */
